@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  discord-bot:
+    build: .
+    image: discord-media-bot:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override these in .env — never hardcode here
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - JELLYFIN_BASE_URL=${JELLYFIN_BASE_URL:-}
+      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY:-}
+      - JELLYFIN_USER_ID=${JELLYFIN_USER_ID:-}
+    # Optional: mount a local yt-dlp cache to speed up repeated lookups
+    # volumes:
+    #   - yt-dlp-cache:/home/botuser/.cache/yt-dlp
+
+# volumes:
+#   yt-dlp-cache:

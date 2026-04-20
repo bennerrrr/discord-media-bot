@@ -1,0 +1,11 @@
+# Discord
+discord.py[voice]==2.3.2
+
+# Audio source extraction
+yt-dlp>=2024.1.1
+
+# HTTP client (Jellyfin API)
+aiohttp>=3.9.0
+
+# Opus support (PyNaCl needed for voice encryption)
+PyNaCl>=1.5.0
