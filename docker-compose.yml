@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   discord-bot:
     build: .
@@ -10,6 +8,7 @@ services:
     environment:
       # Override these in .env — never hardcode here
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - IDLE_TIMEOUT_SECONDS=${IDLE_TIMEOUT_SECONDS:-300}
       - JELLYFIN_BASE_URL=${JELLYFIN_BASE_URL:-}
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY:-}
       - JELLYFIN_USER_ID=${JELLYFIN_USER_ID:-}
