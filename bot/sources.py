@@ -126,23 +126,34 @@ async def resolve_jellyfin(query: str, requester: Optional[str] = None) -> Track
     )
 
 
-async def youtube_suggestions(query: str) -> list[str]:
-    """Fetch YouTube search suggestions for the autocomplete handler."""
+_YDL_SEARCH_OPTIONS = {
+    "quiet": True,
+    "no_warnings": True,
+    "extract_flat": True,
+    "noplaylist": True,
+}
+
+
+async def youtube_suggestions(query: str) -> list[tuple[str, str]]:
+    """Return up to 8 (title, url) pairs for real YouTube videos matching query."""
     if len(query) < 2:
         return []
-    url = "https://suggestqueries.google.com/complete/search"
-    params = {"client": "firefox", "ds": "yt", "q": query}
+
+    loop = asyncio.get_event_loop()
+
+    def _search() -> list[tuple[str, str]]:
+        with yt_dlp.YoutubeDL(_YDL_SEARCH_OPTIONS) as ydl:
+            info = ydl.extract_info(f"ytsearch8:{query}", download=False)
+            return [
+                (e["title"], f"https://www.youtube.com/watch?v={e['id']}")
+                for e in (info.get("entries") or [])
+                if e.get("id") and e.get("title")
+            ]
+
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, params=params, timeout=aiohttp.ClientTimeout(total=2)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json(content_type=None)
-                    return data[1][:25]
+        return await asyncio.wait_for(loop.run_in_executor(None, _search), timeout=2.5)
     except Exception:
-        pass
-    return []
+        return []
 
 
 async def resolve(query: str, requester: Optional[str] = None) -> Track:

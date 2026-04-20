@@ -192,7 +192,7 @@ class Music(commands.Cog):
         if current.lower().startswith("jellyfin:"):
             return []
         suggestions = await youtube_suggestions(current)
-        return [app_commands.Choice(name=s, value=s) for s in suggestions]
+        return [app_commands.Choice(name=title[:100], value=url) for title, url in suggestions]
 
     # ------------------------------------------------------------------
     # /skip
