@@ -11,7 +11,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.queue import QueueManager, Track
-from bot.sources import resolve, FFMPEG_OPTIONS
+from bot.sources import resolve, youtube_suggestions, FFMPEG_OPTIONS
 
 
 # How long to stay in a voice channel with nothing playing before leaving.
@@ -182,6 +182,17 @@ class Music(commands.Cog):
         else:
             position = len(q.list_tracks())
             await interaction.followup.send(f"Added to queue (position {position}): **{track.title}**")
+
+    @play.autocomplete("query")
+    async def play_query_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        if current.lower().startswith("jellyfin:"):
+            return []
+        suggestions = await youtube_suggestions(current)
+        return [app_commands.Choice(name=s, value=s) for s in suggestions]
 
     # ------------------------------------------------------------------
     # /skip

@@ -126,6 +126,25 @@ async def resolve_jellyfin(query: str, requester: Optional[str] = None) -> Track
     )
 
 
+async def youtube_suggestions(query: str) -> list[str]:
+    """Fetch YouTube search suggestions for the autocomplete handler."""
+    if len(query) < 2:
+        return []
+    url = "https://suggestqueries.google.com/complete/search"
+    params = {"client": "firefox", "ds": "yt", "q": query}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url, params=params, timeout=aiohttp.ClientTimeout(total=2)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    return data[1][:25]
+    except Exception:
+        pass
+    return []
+
+
 async def resolve(query: str, requester: Optional[str] = None) -> Track:
     """
     Auto-detects the source:
