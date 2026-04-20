@@ -32,7 +32,14 @@ class Music(commands.Cog):
         vc: Optional[discord.VoiceClient] = self._get_voice_client(guild)
 
         if not track or not vc or not vc.is_connected():
+            print(
+                f"[play_next] skipping: track={track!r}, "
+                f"vc={vc!r}, connected={vc.is_connected() if vc else None}",
+                flush=True,
+            )
             return
+
+        print(f"[play_next] playing {track.title!r} from {track.url[:80]}...", flush=True)
 
         source = discord.FFmpegPCMAudio(
             track.url,
@@ -43,7 +50,9 @@ class Music(commands.Cog):
 
         def after(error: Optional[Exception]) -> None:
             if error:
-                print(f"[playback error] {error}")
+                print(f"[playback error] {error!r}", flush=True)
+            else:
+                print(f"[playback finished] {track.title!r}", flush=True)
             self._play_next(guild)
 
         vc.play(source, after=after)

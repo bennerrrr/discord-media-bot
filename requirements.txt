@@ -1,5 +1,5 @@
 # Discord
-discord.py[voice]==2.3.2
+discord.py[voice]>=2.4.0
 
 # Audio source extraction
 yt-dlp>=2024.1.1

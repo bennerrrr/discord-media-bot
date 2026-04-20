@@ -19,4 +19,7 @@ COPY . .
 RUN useradd -m botuser
 USER botuser
 
+# Flush Python stdout/stderr immediately so `docker logs` shows output live
+ENV PYTHONUNBUFFERED=1
+
 CMD ["python", "-m", "bot.main"]
