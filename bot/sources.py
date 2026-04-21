@@ -158,6 +158,46 @@ async def youtube_suggestions(query: str) -> list[tuple[str, str]]:
         return []
 
 
+_YDL_MIX_OPTIONS = {
+    "quiet": True,
+    "no_warnings": True,
+    "extract_flat": True,
+    "playlistend": 10,
+}
+
+
+async def fetch_related(video_id: str, count: int = 5) -> list[Track]:
+    """Fetch related tracks from the YouTube Mix seeded by video_id."""
+    loop = asyncio.get_event_loop()
+
+    def _extract() -> list[dict]:
+        with yt_dlp.YoutubeDL(_YDL_MIX_OPTIONS) as ydl:
+            url = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
+            info = ydl.extract_info(url, download=False)
+            return [
+                e for e in (info.get("entries") or [])
+                if e.get("id") and e["id"] != video_id
+            ][:count]
+
+    try:
+        entries = await asyncio.wait_for(loop.run_in_executor(None, _extract), timeout=10)
+    except Exception as exc:
+        print(f"[autoplay] fetch_related failed: {exc!r}", flush=True)
+        return []
+
+    return [
+        Track(
+            title=e.get("title", "Unknown"),
+            url=f"https://www.youtube.com/watch?v={e['id']}",
+            source="youtube",
+            duration=e.get("duration"),
+            webpage_url=f"https://www.youtube.com/watch?v={e['id']}",
+            needs_resolution=True,
+        )
+        for e in entries
+    ]
+
+
 async def resolve(query: str, requester: Optional[str] = None) -> Track:
     """
     Auto-detects the source:

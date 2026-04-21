@@ -21,6 +21,7 @@ class Track:
     requester: Optional[str] = None
     webpage_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    needs_resolution: bool = False  # True for autoplay tracks; stream URL resolved on play
 
 
 @dataclass
@@ -28,6 +29,8 @@ class GuildQueue:
     tracks: deque[Track] = field(default_factory=deque)
     current: Optional[Track] = None
     loop_mode: LoopMode = field(default_factory=lambda: LoopMode.OFF)
+    autoplay: bool = False
+    last_video_id: Optional[str] = None
 
     def add(self, track: Track) -> None:
         self.tracks.append(track)

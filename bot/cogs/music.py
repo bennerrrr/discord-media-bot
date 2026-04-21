@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import os
+import re
 from typing import Optional
 
 import discord
@@ -8,7 +9,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.queue import GuildQueue, LoopMode, QueueManager, Track
-from bot.sources import resolve, youtube_suggestions, FFMPEG_OPTIONS
+from bot.sources import fetch_related, resolve, resolve_youtube, youtube_suggestions, FFMPEG_OPTIONS
 
 IDLE_TIMEOUT_SECONDS = int(os.environ.get("IDLE_TIMEOUT_SECONDS", "300"))
 
@@ -37,6 +38,7 @@ class NowPlayingView(discord.ui.View):
         self.pause_resume_btn.emoji = "▶️" if (vc and vc.is_paused()) else "⏸"
         self.loop_btn.label = _LOOP_LABEL[q.loop_mode]
         self.loop_btn.style = _LOOP_STYLE[q.loop_mode]
+        self.autoplay_btn.style = discord.ButtonStyle.success if q.autoplay else discord.ButtonStyle.secondary
         embed = self.cog._make_now_playing_embed(q.current, q) if q.current else None
         if embed:
             await interaction.response.edit_message(embed=embed, view=self)
@@ -88,6 +90,12 @@ class NowPlayingView(discord.ui.View):
     async def shuffle_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         q = self.cog.queue_manager.get(self.guild.id)
         q.shuffle()
+        await self._refresh(interaction)
+
+    @discord.ui.button(emoji="♾️", label="Autoplay", style=discord.ButtonStyle.secondary, row=1)
+    async def autoplay_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        q = self.cog.queue_manager.get(self.guild.id)
+        q.autoplay = not q.autoplay
         await self._refresh(interaction)
 
 
@@ -186,6 +194,8 @@ class Music(commands.Cog):
             if len(upcoming) > 3:
                 lines.append(f"… and {len(upcoming) - 3} more")
             embed.add_field(name="Up Next", value="\n".join(lines), inline=False)
+        if q.autoplay:
+            embed.set_footer(text="♾️ Autoplay on — related tracks queued automatically")
         return embed
 
     async def _play_next(self, guild: discord.Guild) -> None:
@@ -215,10 +225,19 @@ class Music(commands.Cog):
             track = q.next()
 
         if not track:
+            # Queue is empty — try autoplay before giving up
+            if q.autoplay and q.last_video_id:
+                print(f"[autoplay] fetching related for {q.last_video_id}", flush=True)
+                related = await fetch_related(q.last_video_id)
+                for t in related:
+                    q.add(t)
+                if not q.is_empty():
+                    track = q.next()
+
+        if not track:
             print(f"[play_next] queue empty for guild {guild.id}", flush=True)
             if vc.is_connected():
                 self._schedule_idle(guild)
-            # Clear the now-playing panel
             old_view = self._active_views.pop(guild.id, None)
             if old_view:
                 old_view.stop()
@@ -231,8 +250,29 @@ class Music(commands.Cog):
                     pass
             return
 
+        # Resolve stream URL for flat-extracted autoplay tracks
+        if track.needs_resolution:
+            try:
+                resolved = await resolve_youtube(track.webpage_url or track.url)
+                track.url = resolved.url
+                track.title = resolved.title
+                track.duration = resolved.duration
+                track.thumbnail_url = resolved.thumbnail_url
+                track.webpage_url = resolved.webpage_url
+                track.needs_resolution = False
+            except ValueError as exc:
+                print(f"[autoplay] skipping unresolvable track: {exc!r}", flush=True)
+                await self._play_next(guild)
+                return
+
         self._cancel_idle(guild.id)
         print(f"[play_next] playing {track.title!r}", flush=True)
+
+        # Track the video ID so autoplay can seed the next mix
+        if track.source == "youtube" and track.webpage_url:
+            m = re.search(r"[?&]v=([a-zA-Z0-9_-]{11})", track.webpage_url)
+            if m:
+                q.last_video_id = m.group(1)
 
         before_opts = FFMPEG_OPTIONS["before_options"]
         if seek_to:
@@ -545,6 +585,15 @@ class Music(commands.Cog):
         q.loop_mode = _LOOP_NEXT[q.loop_mode]
         labels = {LoopMode.OFF: "Off", LoopMode.TRACK: "🔂 Track", LoopMode.QUEUE: "🔁 Queue"}
         await interaction.response.send_message(f"Loop mode: **{labels[q.loop_mode]}**")
+
+    @app_commands.command(name="autoplay", description="Toggle autoplay — queues related tracks when the queue runs out.")
+    async def autoplay(self, interaction: discord.Interaction) -> None:
+        if not interaction.guild:
+            return
+        q = self.queue_manager.get(interaction.guild.id)
+        q.autoplay = not q.autoplay
+        state = "**on** ♾️" if q.autoplay else "**off**"
+        await interaction.response.send_message(f"Autoplay {state}.")
 
 
 # ---------------------------------------------------------------------------
