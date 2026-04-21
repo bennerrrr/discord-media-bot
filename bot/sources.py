@@ -66,6 +66,8 @@ async def resolve_youtube(query: str, requester: Optional[str] = None) -> Track:
         source="youtube",
         duration=info.get("duration"),
         requester=requester,
+        webpage_url=info.get("webpage_url"),
+        thumbnail_url=info.get("thumbnail"),
     )
 
 
