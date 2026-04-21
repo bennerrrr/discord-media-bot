@@ -160,6 +160,11 @@ class Music(commands.Cog):
     def _get_voice_client(self, guild: discord.Guild) -> Optional[discord.VoiceClient]:
         return guild.voice_client  # type: ignore[return-value]
 
+    async def _set_mute(self, guild: discord.Guild, muted: bool) -> None:
+        vc = self._get_voice_client(guild)
+        if vc and vc.channel:
+            await guild.change_voice_state(channel=vc.channel, self_deaf=True, self_mute=muted)
+
     async def _cleanup_guild(self, guild: discord.Guild, reason: str = "Stopped.") -> None:
         self._cancel_idle(guild.id)
         view = self._active_views.pop(guild.id, None)
@@ -236,6 +241,7 @@ class Music(commands.Cog):
 
         if not track:
             print(f"[play_next] queue empty for guild {guild.id}", flush=True)
+            await self._set_mute(guild, True)
             if vc.is_connected():
                 self._schedule_idle(guild)
             old_view = self._active_views.pop(guild.id, None)
@@ -266,6 +272,7 @@ class Music(commands.Cog):
                 return
 
         self._cancel_idle(guild.id)
+        await self._set_mute(guild, False)
         print(f"[play_next] playing {track.title!r}", flush=True)
 
         # Track the video ID so autoplay can seed the next mix
@@ -335,7 +342,8 @@ class Music(commands.Cog):
         if vc:
             await vc.move_to(channel)
         else:
-            await channel.connect()
+            await channel.connect(self_deaf=True, self_mute=True)
+        await self._set_mute(interaction.guild, True)
         self._last_channel[interaction.guild.id] = interaction.channel  # type: ignore[assignment]
         self._schedule_idle(interaction.guild)
         await interaction.response.send_message(f"Joined **{channel.name}**.")
@@ -360,9 +368,10 @@ class Music(commands.Cog):
 
         vc = self._get_voice_client(interaction.guild)
         if not vc:
-            vc = await member.voice.channel.connect()
+            vc = await member.voice.channel.connect(self_deaf=True, self_mute=True)
         elif vc.channel != member.voice.channel:
             await vc.move_to(member.voice.channel)
+            await self._set_mute(interaction.guild, True)
 
         try:
             track = await resolve(query, requester=interaction.user.display_name)
