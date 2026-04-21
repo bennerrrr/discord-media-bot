@@ -175,7 +175,7 @@ class Music(commands.Cog):
             try:
                 embed = discord.Embed(description=f"⏹ {reason}", color=discord.Color.dark_grey())
                 await msg.edit(embed=embed, view=None)
-            except discord.NotFound:
+            except discord.HTTPException:
                 pass
         self.queue_manager.remove(guild.id)
 
@@ -203,7 +203,7 @@ class Music(commands.Cog):
             embed.set_footer(text="♾️ Autoplay on — related tracks queued automatically")
         return embed
 
-    async def _play_next(self, guild: discord.Guild) -> None:
+    async def _play_next(self, guild: discord.Guild, _resolve_retries: int = 0) -> None:
         if guild.id in self._stopping:
             self._stopping.discard(guild.id)
             return
@@ -252,7 +252,7 @@ class Music(commands.Cog):
                 try:
                     embed = discord.Embed(description="Queue finished.", color=discord.Color.dark_grey())
                     await msg.edit(embed=embed, view=None)
-                except discord.NotFound:
+                except discord.HTTPException:
                     pass
             return
 
@@ -266,9 +266,10 @@ class Music(commands.Cog):
                 track.thumbnail_url = resolved.thumbnail_url
                 track.webpage_url = resolved.webpage_url
                 track.needs_resolution = False
-            except ValueError as exc:
+            except Exception as exc:
                 print(f"[autoplay] skipping unresolvable track: {exc!r}", flush=True)
-                await self._play_next(guild)
+                if _resolve_retries < 4:
+                    await self._play_next(guild, _resolve_retries + 1)
                 return
 
         self._cancel_idle(guild.id)
@@ -318,7 +319,7 @@ class Music(commands.Cog):
                 try:
                     await existing.edit(embed=embed, view=view)
                     msg = existing
-                except discord.NotFound:
+                except discord.HTTPException:
                     pass
             if not msg:
                 msg = await channel.send(embed=embed, view=view)
@@ -385,7 +386,7 @@ class Music(commands.Cog):
 
         if not vc.is_playing() and not vc.is_paused():
             await self._play_next(interaction.guild)
-            await interaction.followup.send(f"Now playing: **{track.title}**")
+            await interaction.followup.send(f"▶️ Starting **{track.title}**.", ephemeral=True)
         else:
             position = len(q.list_tracks())
             await interaction.followup.send(f"Added to queue (position {position}): **{track.title}**")

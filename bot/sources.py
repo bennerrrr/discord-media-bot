@@ -5,7 +5,6 @@ Each resolver returns a Track or raises ValueError on failure.
 from __future__ import annotations
 import os
 import asyncio
-from functools import partial
 from typing import Optional
 
 import aiohttp
@@ -42,19 +41,17 @@ async def resolve_youtube(query: str, requester: Optional[str] = None) -> Track:
     Accepts a YouTube URL or a plain search query.
     Returns a Track with a direct stream URL (no file download).
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
-    def _extract(q: str):
+    def _extract():
         with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-            # If it looks like a URL use it directly; otherwise prefix with ytsearch:
-            search = q if q.startswith("http") else f"ytsearch1:{q}"
+            search = query if query.startswith("http") else f"ytsearch1:{query}"
             info = ydl.extract_info(search, download=False)
-            # ytsearch wraps results in an entries list
             if "entries" in info:
                 info = info["entries"][0]
             return info
 
-    info = await loop.run_in_executor(None, partial(_extract, query))
+    info = await loop.run_in_executor(None, _extract)
 
     stream_url = info.get("url")
     if not stream_url:
@@ -141,7 +138,7 @@ async def youtube_suggestions(query: str) -> list[tuple[str, str]]:
     if len(query) < 2:
         return []
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _search() -> list[tuple[str, str]]:
         with yt_dlp.YoutubeDL(_YDL_SEARCH_OPTIONS) as ydl:
@@ -168,7 +165,7 @@ _YDL_MIX_OPTIONS = {
 
 async def fetch_related(video_id: str, count: int = 5) -> list[Track]:
     """Fetch related tracks from the YouTube Mix seeded by video_id."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _extract() -> list[dict]:
         with yt_dlp.YoutubeDL(_YDL_MIX_OPTIONS) as ydl:
